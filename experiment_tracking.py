@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from gsmp_config import expand_path
+from gmsp_config import expand_path
 
 
 def _json_default(value):
@@ -98,7 +98,14 @@ class ExperimentTracker:
             "cwd": os.getcwd(),
             "env": {
                 key: os.getenv(key)
-                for key in ("CUDA_VISIBLE_DEVICES", "GSMP_CONFIG_PATH", "GSMP_OPENAI_API_KEY", "OPENAI_API_KEY")
+                for key in (
+                    "CUDA_VISIBLE_DEVICES",
+                    "GMSP_CONFIG_PATH",
+                    "GSMP_CONFIG_PATH",
+                    "GMSP_OPENAI_API_KEY",
+                    "GSMP_OPENAI_API_KEY",
+                    "OPENAI_API_KEY",
+                )
                 if os.getenv(key) is not None
             },
         }

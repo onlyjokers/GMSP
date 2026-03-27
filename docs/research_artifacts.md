@@ -1,15 +1,15 @@
-# GSMP Research Artifacts
+# GMSP Research Artifacts
 
 ## Best Practice
 
 把实验记录拆成两层：
 
 1. 版本控制里的默认配置  
-   文件：`gsmp_config.json`  
+   文件：`gmsp_config.json`  
    用来保存可复现的默认超参数、执行超时、路径约定、profile。
 
 2. 本地机器覆盖配置  
-   文件：`gsmp_config.local.json`  
+   文件：`gmsp_config.local.json`  
    用来保存私有 IP、API key 相关路径、机器特定目录，不进 git。
 
 ## 每次训练必须保留

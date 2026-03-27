@@ -11,4 +11,5 @@ artifacts/
 unsloth_compiled_cache/
 
 # 本地机器覆盖配置
+gmsp_config.local.json
 gsmp_config.local.json

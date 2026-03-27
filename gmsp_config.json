@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "webtrans": {
+    "timeout_ms": 15000,
+    "material_timeout_sec": 30.0,
+    "full_results_cache_size": 10,
+    "response_cache_size": 128,
+    "output_dir": "~/GMSPforBlender/output"
+  },
+  "ranking": {
+    "model": "gpt-4.1-mini",
+    "system_prompt": "You are an agent - please continue until the user's query is completely resolved, and then end your round and return to the user. Only when you are sure that the problem has been solved will your turn be terminated. You will reply in the form of json."
+  },
+  "tracking": {
+    "enabled": true,
+    "runs_dir": "./runs",
+    "save_reward_payloads": true,
+    "save_samples": true,
+    "save_dataset_summary": true
+  },
+  "profile_defaults": {
+    "transport": {
+      "server_address": "localhost",
+      "port": 5555,
+      "timeout_ms": 15000,
+      "reverse_mode": false
+    },
+    "lora": {
+      "finetune_vision_layers": false,
+      "finetune_language_layers": true,
+      "finetune_attention_modules": true,
+      "finetune_mlp_modules": true,
+      "lora_dropout": 0,
+      "bias": "none",
+      "random_state": 3407
+    },
+    "training": {
+      "algorithm": "dapo",
+      "loss_type": "dapo",
+      "mask_truncated_completions": true,
+      "epsilon": 0.2,
+      "epsilon_high": 0.28,
+      "beta": 0.0,
+      "use_soft_overlong_punishment": true,
+      "soft_overlong_cache_ratio": 0.2,
+      "dynamic_sampling": false,
+      "learning_rate": 5e-06,
+      "adam_beta1": 0.9,
+      "adam_beta2": 0.99,
+      "weight_decay": 0.1,
+      "warmup_ratio": 0.1,
+      "lr_scheduler_type": "cosine",
+      "optim": "adamw_torch_fused",
+      "logging_steps": 1,
+      "per_device_train_batch_size": 4,
+      "gradient_accumulation_steps": 1,
+      "num_generations": 4,
+      "max_prompt_length": 256,
+      "max_steps": 1200,
+      "save_steps": 200,
+      "max_grad_norm": 0.1,
+      "report_to": "none"
+    }
+  },
+  "profiles": {
+    "blenderllm2_gemma3_12b": {
+      "transport": {
+        "server_address": "10.30.244.17",
+        "port": 5555
+      },
+      "model": {
+        "model_name": "./models/gemma-3-12b-it",
+        "max_seq_length": 2048,
+        "lora_rank": 16,
+        "load_in_4bit": true,
+        "load_in_8bit": false,
+        "full_finetuning": false
+      },
+      "training": {
+        "output_name": "blenderllm2_gemma3_12b"
+      }
+    },
+    "blenderllm_qwen3_8b": {
+      "transport": {
+        "server_address": "121.196.205.73",
+        "port": 5678
+      },
+      "model": {
+        "model_name": "./models/Qwen3-8B",
+        "max_seq_length": 2048,
+        "lora_rank": 32,
+        "load_in_4bit": false,
+        "load_in_8bit": true,
+        "full_finetuning": false,
+        "use_gradient_checkpointing": "unsloth"
+      },
+      "training": {
+        "output_name": "blenderllm_qwen3_8b"
+      }
+    }
+  }
+}

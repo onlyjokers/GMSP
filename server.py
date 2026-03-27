@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from ..GPT_API import image_ranking_api
-from gsmp_config import expand_path, load_gsmp_config
+from gmsp_config import expand_path, load_gmsp_config
 
 
 OUTPUT_DIR = "/Users/ziqi/Downloads/BlenderLLM/BlenderOPT"
@@ -61,7 +61,7 @@ class MaterialDataReceiver:
         self.shutdown_event = threading.Event()
         self.response_cache = {}  # 缓存请求原始消息到响应数据
         self.full_results_cache = {}  # 缓存 taskid 到完整排序结果
-        runtime_config = load_gsmp_config()
+        runtime_config = load_gmsp_config()
         webtrans_config = runtime_config.get("webtrans", {})
         self.material_timeout = float(webtrans_config.get("material_timeout_sec", 30.0))
         self.full_results_cache_size = int(webtrans_config.get("full_results_cache_size", 10))
@@ -928,7 +928,7 @@ def get_output_dir():
     try:
         return bpy.context.scene.ntp_options.webtrans_output_dir
     except Exception:
-        runtime_config = load_gsmp_config()
+        runtime_config = load_gmsp_config()
         configured_output = runtime_config.get("webtrans", {}).get("output_dir")
         if configured_output:
             return str(expand_path(configured_output, base_dir=Path(__file__).resolve().parent))

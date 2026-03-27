@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "blenderllm2_gemma3_12b": {
+      "transport": {
+        "server_address": "127.0.0.1",
+        "port": 5555
+      }
+    },
+    "blenderllm_qwen3_8b": {
+      "transport": {
+        "server_address": "127.0.0.1",
+        "port": 5555
+      }
+    }
+  },
+  "webtrans": {
+    "output_dir": "~/GMSPforBlender/output"
+  }
+}
