@@ -35,6 +35,15 @@
       "random_state": 3407
     },
     "training": {
+      "algorithm": "dapo",
+      "loss_type": "dapo",
+      "mask_truncated_completions": true,
+      "epsilon": 0.2,
+      "epsilon_high": 0.28,
+      "beta": 0.0,
+      "use_soft_overlong_punishment": true,
+      "soft_overlong_cache_ratio": 0.2,
+      "dynamic_sampling": false,
       "learning_rate": 5e-06,
       "adam_beta1": 0.9,
       "adam_beta2": 0.99,
@@ -68,7 +77,6 @@
         "full_finetuning": false
       },
       "training": {
-        "beta": 0.0,
         "output_name": "blenderllm2_gemma3_12b"
       }
     },
@@ -87,7 +95,6 @@
         "use_gradient_checkpointing": "unsloth"
       },
       "training": {
-        "beta": 0.001,
         "output_name": "blenderllm_qwen3_8b"
       }
     }

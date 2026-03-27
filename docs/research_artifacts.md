@@ -25,6 +25,12 @@
   - git commit / branch / dirty 状态
 - `config.profile.json`
   - 当前训练真正使用的 profile
+- `rl_recipe.json`
+  - 当前 RL 算法名称
+  - DAPO / GRPO 等关键 loss 配置
+  - clip 区间
+  - overlong 处理方式
+  - 实际启用的 reward 函数列表
 - `config.full.json`
   - 合并后的完整配置
 - `environment.json`
@@ -58,6 +64,7 @@
 - 固定评测集和其版本快照
 - 训练时使用的 prompt 模板
 - reward 函数源码版本
+- RL 算法配方版本
 - 典型成功 / 失败样例
 - 不同 checkpoint 的人工评测表
 - 最终图表生成脚本

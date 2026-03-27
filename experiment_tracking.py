@@ -78,6 +78,8 @@ class ExperimentTracker:
                     "",
                     "## Reward Design Changes",
                     "",
+                    "## RL Recipe Notes",
+                    "",
                     "## Failure Cases",
                     "",
                     "## Checkpoint Selection Rationale",
