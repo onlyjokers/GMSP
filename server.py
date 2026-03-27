@@ -1,6 +1,7 @@
 import bpy
 import os
 import ast
+import hashlib
 import zmq
 import msgpack
 import threading
@@ -11,6 +12,7 @@ import json
 from pathlib import Path
 
 from ..GPT_API import image_ranking_api
+from gsmp_config import expand_path, load_gsmp_config
 
 
 OUTPUT_DIR = "/Users/ziqi/Downloads/BlenderLLM/BlenderOPT"
@@ -59,6 +61,65 @@ class MaterialDataReceiver:
         self.shutdown_event = threading.Event()
         self.response_cache = {}  # 缓存请求原始消息到响应数据
         self.full_results_cache = {}  # 缓存 taskid 到完整排序结果
+        runtime_config = load_gsmp_config()
+        webtrans_config = runtime_config.get("webtrans", {})
+        self.material_timeout = float(webtrans_config.get("material_timeout_sec", 30.0))
+        self.full_results_cache_size = int(webtrans_config.get("full_results_cache_size", 10))
+        self.response_cache_size = int(webtrans_config.get("response_cache_size", 128))
+
+    def _build_cache_key(self, taskid, message):
+        """构造稳定的缓存键，避免缺失 taskid 时串任务。"""
+        if taskid:
+            return f"task:{taskid}"
+        return f"message:{hashlib.sha1(message).hexdigest()}"
+
+    def _trim_cache(self, cache, max_size):
+        while len(cache) > max_size:
+            oldest_key = next(iter(cache))
+            del cache[oldest_key]
+
+    def _validate_material_code(self, material_code):
+        """对模型生成的材质代码做最基本的安全约束。"""
+        try:
+            tree = ast.parse(material_code)
+        except SyntaxError as se:
+            line_no = se.lineno if hasattr(se, 'lineno') else '未知'
+            col_no = se.offset if hasattr(se, 'offset') else '未知'
+            return False, f"材质代码中有语法错误: 第{line_no}行，第{col_no}列: {se}"
+
+        allowed_import_roots = {'bpy', 'mathutils'}
+        blocked_call_names = {'open', 'exec', 'eval', 'compile', '__import__', 'input'}
+        blocked_roots = {'os', 'sys', 'subprocess', 'socket', 'pathlib', 'shutil', 'requests', 'urllib'}
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split('.')[0]
+                    if root not in allowed_import_roots:
+                        return False, f"不允许导入模块: {alias.name}"
+            elif isinstance(node, ast.ImportFrom):
+                module_name = node.module or ''
+                root = module_name.split('.')[0]
+                if root not in allowed_import_roots:
+                    return False, f"不允许导入模块: {module_name or '未知模块'}"
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name) and func.id in blocked_call_names:
+                    return False, f"不允许调用危险函数: {func.id}"
+                if isinstance(func, ast.Attribute):
+                    root = func.value
+                    while isinstance(root, ast.Attribute):
+                        root = root.value
+                    if isinstance(root, ast.Name) and root.id in blocked_roots:
+                        return False, f"不允许访问危险模块: {root.id}"
+            elif isinstance(node, ast.Attribute):
+                root = node.value
+                while isinstance(root, ast.Attribute):
+                    root = root.value
+                if isinstance(root, ast.Name) and root.id in blocked_roots:
+                    return False, f"不允许访问危险模块: {root.id}"
+
+        return True, ""
 
     def start(self):
         """启动服务器线程"""
@@ -208,22 +269,22 @@ class MaterialDataReceiver:
                             head = data.get('head', {})
                             taskid = head.get('taskid')
                             request_fields = head.get('request', [])
+                            include_raw_outputs = not request_fields or 'all' in request_fields
                             # 如果 request_fields 为空或包含 'all'，则返回所有字段
-                            if not request_fields or 'all' in request_fields:
+                            if include_raw_outputs:
                                 request_fields = ['accuracy_rank', 'meaning_rank', 'status', 'error_msg', 'id', 'name']
                             print(f"接收到材质组，共 {len(material_group)} 个材质，会话ID: {session_id}, taskid: {taskid}, request: {request_fields}")
                             # 缓存单次处理结果，避免重复执行
-                            if taskid not in self.full_results_cache:
+                            cache_key = self._build_cache_key(taskid, message)
+                            if cache_key not in self.full_results_cache:
                                 # 执行材质组处理，获取结果和 raw 输出
                                 proc_output = self._process_material_group(material_group)
                                 # 保存到缓存，包括 results 和 raw 输出
-                                self.full_results_cache[taskid] = proc_output
+                                self.full_results_cache[cache_key] = proc_output
                                 # 限制缓存大小, 最多保留10个任务, 删除最老的
-                                if len(self.full_results_cache) > 10:
-                                    oldest_task = next(iter(self.full_results_cache))
-                                    del self.full_results_cache[oldest_task]
+                                self._trim_cache(self.full_results_cache, self.full_results_cache_size)
                             else:
-                                proc_output = self.full_results_cache[taskid]
+                                proc_output = self.full_results_cache[cache_key]
                             # 从 proc_output 中获取列表和 raw 输出
                             full_results = proc_output['results']
                             accuracy_raw = proc_output.get('accuracy_raw')
@@ -238,7 +299,7 @@ class MaterialDataReceiver:
                                     # 未知字段，忽略或设置为None
                                     response[field] = None
                             # 只有当 request_fields 为空 或者 包含 'all' 时才添加 raw 输出信息
-                            if not request_fields or 'all' in request_fields:
+                            if include_raw_outputs:
                                 print("检测到空请求字段或包含'all'，添加完整的排序输出信息")
                                 response['accuracy_output'] = accuracy_raw
                                 response['meaning_output'] = meaning_raw
@@ -301,6 +362,7 @@ class MaterialDataReceiver:
                     response_data = msgpack.packb(response)
                     # 缓存响应数据以便处理重复请求
                     self.response_cache[message] = response_data
+                    self._trim_cache(self.response_cache, self.response_cache_size)
                     # 发送响应
                     if self.reverse_mode:
                         # 反向模式：发送多部分消息
@@ -367,6 +429,8 @@ class MaterialDataReceiver:
         # 获取上一次请求中的问题文本
         questions = getattr(self, 'last_questions', '')
         results = []
+        accuracy_ranking_result = None
+        meaning_ranking_result = None
         print(f"开始处理 {len(material_group)} 个材质...")
         now = datetime.datetime.now()
         subdir = now.strftime("%H.%M.%S.%d.%m")
@@ -394,15 +458,17 @@ class MaterialDataReceiver:
                 print(f"保存代码文件失败: {e}")
             if not material_code:
                 results.append({
+                    'id': material_id,
                     'name': material_name,
                     'status': False,
                     'error_msg': '没有提供材质代码',
                     'accuracy_rank': 0,  # 没有代码的设为0
-                    'meaning_rank': 1
+                    'meaning_rank': 0
                 })
                 continue
             success, error_msg = self._process_material(material_code, material_name)                # 构建结果对象
             result = {
+                'id': material_id,
                 'name': material_name,
                 'status': success,
                 'error_msg': '' if success else error_msg,
@@ -647,10 +713,6 @@ class MaterialDataReceiver:
                 result['accuracy_rank'] = idx + 1
                 result['meaning_rank'] = idx + 1
         
-        # 初始化变量以确保即使在异常情况下也有定义
-        accuracy_ranking_result = None
-        meaning_ranking_result = None
-            
         print(f"材质组处理完成，结果数量: {len(results)}")
         # 返回结果列表以及 raw 排序输出
         return {
@@ -674,32 +736,28 @@ class MaterialDataReceiver:
             return False, "材质代码为空"
             
         # 使用Blender的计时器在主线程中执行此函数
-        result = {'success': False, 'error_msg': ''}
+        result = {'success': False, 'error_msg': '', 'done': False}
         
         def create_material():
+            render_object = None
+            original_materials = None
+            original_render_path = None
             try:
                 # 标记图片是否被创建
                 image_created = False
                 output_path = None
-                
-                # 检查代码语法
-                try:
-                    ast.parse(material_code)
-                except SyntaxError as se:
-                    line_no = se.lineno if hasattr(se, 'lineno') else '未知'
-                    col_no = se.offset if hasattr(se, 'offset') else '未知'
-                    error_msg = f"材质代码中有语法错误: 第{line_no}行，第{col_no}列: {se}"
-                    result['error_msg'] = error_msg
+
+                is_valid, validation_error = self._validate_material_code(material_code)
+                if not is_valid:
+                    result['error_msg'] = validation_error
                     return
-                
-                # 删除所有现有材质
-                for material in list(bpy.data.materials):
-                    bpy.data.materials.remove(material)
+
+                before_material_names = list(bpy.data.materials.keys())
+                before_material_set = set(before_material_names)
                 
                 # 创建命名空间
                 namespace = {
                     'bpy': bpy,
-                    'os': os,
                     'material_name': material_name
                 }
                 
@@ -725,23 +783,38 @@ class MaterialDataReceiver:
                 
                 # 如果代码自己创建了材质，找出新创建的材质
                 if creates_own_material:
-                    after_materials = set(bpy.data.materials.keys())
-                    if len(after_materials) > 0:
-                        material = bpy.data.materials[list(after_materials)[0]]
+                    after_material_names = list(bpy.data.materials.keys())
+                    new_material_names = [name for name in after_material_names if name not in before_material_set]
+                    if new_material_names:
+                        material = bpy.data.materials[new_material_names[-1]]
                         print(f"代码创建了自己的材质: {material.name}")
+                    elif material_name in bpy.data.materials:
+                        material = bpy.data.materials[material_name]
                 
                 # 自动将材质应用到名为"平面"的对象
                 if material:
                     applied = False
+                    preferred_objects = []
+                    named_plane = bpy.data.objects.get('平面')
+                    if named_plane and named_plane.type == 'MESH':
+                        preferred_objects.append(named_plane)
+                    active_object = bpy.context.active_object
+                    if active_object and active_object.type == 'MESH' and active_object not in preferred_objects:
+                        preferred_objects.append(active_object)
                     for obj in bpy.data.objects:
-                        if obj.type == 'MESH' and obj.name == '平面':
-                            obj.data.materials.clear()
-                            obj.data.materials.append(material)
-                            print(f"将材质 {material.name} 应用到对象 {obj.name}")
-                            applied = True
-                            break
+                        if obj.type == 'MESH' and obj not in preferred_objects:
+                            preferred_objects.append(obj)
+
+                    for obj in preferred_objects:
+                        render_object = obj
+                        original_materials = [slot.material for slot in obj.material_slots]
+                        obj.data.materials.clear()
+                        obj.data.materials.append(material)
+                        print(f"将材质 {material.name} 应用到对象 {obj.name}")
+                        applied = True
+                        break
                     if not applied:
-                        print("警告：场景中没有找到名为'平面'的网格对象")
+                        print("警告：场景中没有找到可用的网格对象")
                     else:
                         try:
                             scene = bpy.context.scene
@@ -749,6 +822,7 @@ class MaterialDataReceiver:
                             if camera is None:
                                 print("未找到当前场景的摄像机，跳过渲染保存")
                             else:
+                                original_render_path = scene.render.filepath
                                 output_dir = getattr(self, '_current_group_dir', get_output_dir())
                                 os.makedirs(output_dir, exist_ok=True)
                                 safe_name = material_name.replace('/', '_').replace('\\', '_')
@@ -780,6 +854,23 @@ class MaterialDataReceiver:
                 print(error_msg)
                 traceback.print_exc()
                 result['error_msg'] = error_msg
+            finally:
+                try:
+                    if render_object is not None:
+                        render_object.data.materials.clear()
+                        for existing_material in original_materials or []:
+                            if existing_material is not None:
+                                render_object.data.materials.append(existing_material)
+                except Exception as restore_exc:
+                    print(f"恢复对象材质时出错: {restore_exc}")
+
+                try:
+                    if original_render_path is not None:
+                        bpy.context.scene.render.filepath = original_render_path
+                except Exception as restore_exc:
+                    print(f"恢复渲染输出路径时出错: {restore_exc}")
+
+                result['done'] = True
             
             return None
         
@@ -787,16 +878,16 @@ class MaterialDataReceiver:
         bpy.app.timers.register(create_material)
         
         # 等待执行完成
-        timeout = 5.0  # 最长等待5秒
+        timeout = self.material_timeout
         start_time = time.time()
-        while not result['success'] and not result['error_msg'] and time.time() - start_time < timeout:
+        while not result['done'] and time.time() - start_time < timeout:
             # 检查是否需要中止等待
             if not self.running or self.shutdown_event.is_set():
                 return False, "服务停止，中止材质处理"
             time.sleep(0.1)
         
         # 如果超时
-        if not result['success'] and not result['error_msg']:
+        if not result['done']:
             result['error_msg'] = '处理材质超时'
         
         return result['success'], result['error_msg']
@@ -837,4 +928,8 @@ def get_output_dir():
     try:
         return bpy.context.scene.ntp_options.webtrans_output_dir
     except Exception:
+        runtime_config = load_gsmp_config()
+        configured_output = runtime_config.get("webtrans", {}).get("output_dir")
+        if configured_output:
+            return str(expand_path(configured_output, base_dir=Path(__file__).resolve().parent))
         return OUTPUT_DIR

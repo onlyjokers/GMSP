@@ -163,6 +163,13 @@ class MaterialSender:
                             self.message_queue.put((server_id, response))
                             # 设置响应事件，通知主线程
                             self.response_event.set()
+                        elif any(
+                            key in response
+                            for key in ('accuracy_rank', 'meaning_rank', 'error_msg', 'id', 'name', 'taskid')
+                        ):
+                            print(f"收到字段映射响应: {list(response.keys())}")
+                            self.message_queue.put((server_id, response))
+                            self.response_event.set()
                         else:
                             print(f"收到未知响应格式: {response.keys()}")
                     except Exception as e:
@@ -178,6 +185,54 @@ class MaterialSender:
                 print(f"监听线程错误: {e}")
                 traceback.print_exc()
                 time.sleep(1)  # 避免错误循环过快
+
+    def send_material(self, material_code, material_name="remote_material"):
+        """向服务器发送单个材质代码。
+
+        兼容旧的单材质接口，并将批量接口的返回值归一化成单材质结果。
+        """
+        results = self.send_material_group([{
+            'id': 1,
+            'name': material_name,
+            'code': material_code,
+        }])
+
+        if isinstance(results, dict):
+            status_value = results.get('status', {}).get(material_name)
+            error_value = results.get('error_msg', {}).get(material_name, '')
+            accuracy_value = results.get('accuracy_rank', {}).get(material_name, 0)
+            meaning_value = results.get('meaning_rank', {}).get(material_name, 0)
+            name_value = results.get('name', {}).get(material_name, material_name)
+            id_value = results.get('id', {}).get(material_name, 1)
+            return {
+                'id': id_value,
+                'name': name_value,
+                'status': 'Success' if status_value else 'failed',
+                'error_msg': error_value,
+                'accuracy_rank': accuracy_value,
+                'meaning_rank': meaning_value,
+            }
+
+        if isinstance(results, list) and results:
+            result = results[0]
+            status_value = result.get('status', False)
+            return {
+                'id': result.get('id', 1),
+                'name': result.get('name', material_name),
+                'status': 'Success' if status_value else 'failed',
+                'error_msg': result.get('error_msg', ''),
+                'accuracy_rank': result.get('accuracy_rank', 0),
+                'meaning_rank': result.get('meaning_rank', 0),
+            }
+
+        return {
+            'id': 1,
+            'name': material_name,
+            'status': 'failed',
+            'error_msg': '服务器未返回有效结果',
+            'accuracy_rank': 0,
+            'meaning_rank': 0,
+        }
     
     def send_material_group(self, material_group):
         """发送材质组数据到服务器
@@ -294,6 +349,11 @@ class MaterialSender:
                             else:
                                 print("警告：服务器响应中没有'material_results'字段")
                                 print(f"收到的响应键: {list(response.keys())}")
+                                if any(
+                                    key in response
+                                    for key in ('accuracy_rank', 'meaning_rank', 'status', 'error_msg', 'id', 'name')
+                                ):
+                                    return response
                                 # 尝试使用向后兼容的方式处理旧格式响应
                                 if 'status' in response:
                                     status = response.get('status', 'failed')

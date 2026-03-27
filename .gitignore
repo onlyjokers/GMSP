@@ -4,6 +4,11 @@ models/
 # 不传递模型输出内容
 outputs/
 outputs_*/
+runs/
+artifacts/
 
 # 不传递 unsloth 自动生成的文件
 unsloth_compiled_cache/
+
+# 本地机器覆盖配置
+gsmp_config.local.json
