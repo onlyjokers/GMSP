@@ -21,11 +21,8 @@
   "default_profile": "blenderllm_qwen3_5_4b",
   "profile_defaults": {
     "transport": {
-      "server_address": "localhost",
-      "port": 5555,
-      "timeout_ms": 15000,
-      "reverse_mode": false,
-      "relay_server": null
+      "relay_server": "ws://localhost:8080",
+      "timeout_ms": 15000
     },
     "lora": {
       "finetune_vision_layers": false,
@@ -67,8 +64,7 @@
   "profiles": {
     "blenderllm2_gemma3_12b": {
       "transport": {
-        "server_address": "10.30.244.17",
-        "port": 5555
+        "relay_server": "ws://10.30.244.17:8080"
       },
       "model": {
         "model_name": "./models/gemma-3-12b-it",
@@ -84,8 +80,7 @@
     },
     "blenderllm_qwen3_5_4b": {
       "transport": {
-        "server_address": "121.196.205.73",
-        "port": 5678
+        "relay_server": "ws://121.196.205.73:8080"
       },
       "model": {
         "model_name": "./models/qwen3.5-4b",
@@ -105,8 +100,7 @@
     },
     "blenderllm_qwen3_8b": {
       "transport": {
-        "server_address": "121.196.205.73",
-        "port": 5678
+        "relay_server": "ws://121.196.205.73:8080"
       },
       "model": {
         "model_name": "./models/qwen3.5-4b",

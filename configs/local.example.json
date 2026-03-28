@@ -3,21 +3,17 @@
   "profiles": {
     "blenderllm2_gemma3_12b": {
       "transport": {
-        "server_address": "127.0.0.1",
-        "port": 5555
+        "relay_server": "ws://127.0.0.1:8080"
       }
     },
     "blenderllm_qwen3_5_4b": {
       "transport": {
-        "server_address": "127.0.0.1",
-        "port": 5555,
         "relay_server": "ws://你的阿里云IP:8080"
       }
     },
     "blenderllm_qwen3_8b": {
       "transport": {
-        "server_address": "127.0.0.1",
-        "port": 5555
+        "relay_server": "ws://127.0.0.1:8080"
       }
     }
   },

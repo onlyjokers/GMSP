@@ -31,11 +31,8 @@ FALLBACK_CONFIG = {
     "default_profile": DEFAULT_PROFILE_NAME,
     "profile_defaults": {
         "transport": {
-            "server_address": "localhost",
-            "port": 5555,
+            "relay_server": "ws://localhost:8080",
             "timeout_ms": 15000,
-            "reverse_mode": False,
-            "relay_server": None,
         },
         "lora": {
             "finetune_vision_layers": False,
