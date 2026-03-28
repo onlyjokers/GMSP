@@ -1,15 +1,20 @@
-# 不传递模型，但是传递数据集
 models/
-
-# 不传递模型输出内容
 outputs/
 outputs_*/
 runs/
 artifacts/
-
-# 不传递 unsloth 自动生成的文件
 unsloth_compiled_cache/
 
-# 本地机器覆盖配置
+configs/local.json
 gmsp_config.local.json
 gsmp_config.local.json
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.ipynb_checkpoints/
+
+.vscode/
+.DS_Store
