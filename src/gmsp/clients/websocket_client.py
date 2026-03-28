@@ -260,14 +260,19 @@ class WebSocketClientSender:
             self._loop = None
         print("连接已关闭")
 
-    def send_materials(self, materials_json) -> dict:
+    def send_materials(self, materials_json):
         """发送材质数据，接口与 ClientSender.send_materials() 一致
+
+        成功时返回字段映射格式 dict（与 ZeroMQ 路径一致）：
+            {"accuracy_rank": {"M1": 2}, "status": {"M1": true}, ...}
+        失败时返回 list（与 ClientSender 一致）：
+            [{"id": ..., "name": ..., "status": False, "error_msg": ...}]
 
         Args:
             materials_json: 包含材质数据的字典或列表
 
         Returns:
-            dict: 字段映射格式的结果（与 ZeroMQ 路径一致）
+            dict 或 list
         """
         import time
         import uuid
@@ -285,6 +290,16 @@ class WebSocketClientSender:
             if not isinstance(material, dict) or "name" not in material or "code" not in material:
                 return [{'status': False, 'error_msg': f"材质 #{idx+1} 格式错误：缺少name或code字段"}]
 
+        def _error_results(msg):
+            return [{
+                'id': m.get('id'),
+                'name': m.get('name'),
+                'status': False,
+                'error_msg': msg,
+                'accuracy_rank': 0,
+                'meaning_rank': 1,
+            } for m in material_list]
+
         # 确保已连接
         if not self.connected:
             retry_count = 0
@@ -295,7 +310,7 @@ class WebSocketClientSender:
                 if retry_count < self.max_retries:
                     time.sleep(self.retry_delay)
             if not self.connected:
-                return {'status': {}, 'error_msg': {m.get('name', ''): f"经过 {self.max_retries} 次尝试后仍无法连接" for m in material_list}}
+                return _error_results(f"经过 {self.max_retries} 次尝试后仍无法连接")
 
         # 构造请求
         head = data.get("head", {})
@@ -326,7 +341,7 @@ class WebSocketClientSender:
                     self.close()
                     self.connect()
 
-        return {'status': {}, 'error_msg': {m.get('name', ''): "多次尝试后仍无法获取响应" for m in material_list}}
+        return _error_results("多次尝试后仍无法获取响应")
 
     def __enter__(self):
         self.connect()
