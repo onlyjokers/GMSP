@@ -1,0 +1,35 @@
+# GMSP - Training Side Dependencies
+# ===================================
+# Install with: pip install -r requirements.txt
+#
+# NOTE: PyTorch must be installed FIRST with the correct CUDA version.
+# See README.md for instructions.
+
+# --- Core ML ---
+# torch is installed separately (see README)
+unsloth
+trl>=0.15.0
+transformers>=4.51.0
+datasets
+accelerate
+peft
+
+# --- Communication ---
+pyzmq
+msgpack
+websockets
+
+# --- Model Sources ---
+modelscope
+huggingface_hub
+
+# --- OpenAI (for LLM-as-judge ranking on Blender side) ---
+openai
+
+# --- Tracking ---
+tensorboard
+
+# --- Utilities ---
+numpy
+matplotlib
+seaborn

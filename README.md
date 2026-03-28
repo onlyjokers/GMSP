@@ -1,240 +1,331 @@
 # GMSP
 
-GMSP is a research workspace for Blender material generation, remote Blender execution, and RL-style training loops.
+GMSP 是一个用于 Blender 材质生成的研究工作区，核心流程：LLM 生成 Blender 材质的 Python 代码 → 通过 WebSocket 发送到远程 Blender 实例（`GMSPforBlender` 插件）→ Blender 返回准确度/意义排名 → 排名作为奖励信号反馈到 DAPO 强化学习训练循环。
 
-The project is now organized around a more standard AI research layout:
+Blender 插件在独立的 `GMSPforBlender` 仓库中。本仓库是训练和实验端。
 
-- `src/` for reusable Python modules
-- `scripts/` for runnable entrypoints and diagnostics
-- `configs/` for shared and local config files
-- `notebooks/` for exploratory and training notebooks
-- `data/` for datasets
-- `docs/` for operating notes
-
-The Blender add-on itself lives in the separate `GMSPforBlender` repository. This repository is the training and experimentation side.
-
-## Layout
+## 项目结构
 
 ```text
 GMSP/
 ├─ pyproject.toml
 ├─ README.md
+├─ requirements.txt
 ├─ configs/
-│  ├─ default.json
-│  └─ local.example.json
+│  ├─ default.json          # 共享默认配置（提交到 git）
+│  ├─ local.json             # 本机覆盖配置（gitignored）
+│  └─ local.example.json     # local.json 模板
 ├─ data/
-│  └─ external/
+│  └─ external/              # 外部数据集
 ├─ docs/
 ├─ notebooks/
-│  └─ gmsp_main.ipynb
+│  └─ gmsp_main.ipynb        # 主训练入口
 ├─ scripts/
-│  ├─ send_material.py
-│  ├─ send_glsl.py
-│  ├─ manual_runner.py
-│  ├─ check_cuda.py
-│  └─ setup_model_sources.py
+│  ├─ check_cuda.py          # GPU/CUDA 环境检查
+│  ├─ setup_model_sources.py # 模型下载
+│  ├─ relay_server.py        # WebSocket 中转服务器
+│  ├─ test_relay.py          # 中转服务器测试
+│  └─ test_network.py        # 端到端网络测试
 ├─ src/
 │  └─ gmsp/
-│     ├─ config.py
-│     ├─ clients/
-│     ├─ tracking/
-│     └─ training/
+│     ├─ config.py           # 三层配置系统
+│     ├─ clients/            # WebSocket 客户端
+│     ├─ tracking/           # 实验追踪
+│     └─ training/           # RL 训练
 ├─ tests/
-└─ models/
+├─ models/                   # 本地模型（gitignored）
+└─ runs/                     # 训练产物（gitignored）
 ```
 
-## Core Modules
+## 核心模块
 
-- [config.py](/home/GSMP/GMSP/src/gmsp/config.py)
-  Loads the project config, resolves paths, and selects profiles.
-- [clients/\_\_init\_\_.py](/home/GSMP/GMSP/src/gmsp/clients/__init__.py)
-  `create_transport_client(transport_config)` — 工厂函数，根据配置自动选择 ZeroMQ 或 WebSocket 客户端。
-- [blender_client.py](/home/GSMP/GMSP/src/gmsp/clients/blender_client.py)
-  ZeroMQ client for sending Blender material jobs (`ClientSender`).
-- [websocket_client.py](/home/GSMP/GMSP/src/gmsp/clients/websocket_client.py)
-  WebSocket client for relay server (`WebSocketClientSender`). 同步接口与 `ClientSender` 一致。
-- [glsl_client.py](/home/GSMP/GMSP/src/gmsp/clients/glsl_client.py)
-  ZeroMQ client for GLSL-side experiments.
-- [rl_training.py](/home/GSMP/GMSP/src/gmsp/training/rl_training.py)
-  RL training argument construction and reward composition.
-- [experiment_tracking.py](/home/GSMP/GMSP/src/gmsp/tracking/experiment_tracking.py)
-  Run manifests, metrics, reward payload logging, and checkpoint metadata.
+- `src/gmsp/config.py` — 三层配置加载、路径解析、Profile 选择
+- `src/gmsp/clients/` — WebSocket 客户端，`create_transport_client()` 工厂函数
+- `src/gmsp/training/rl_training.py` — DAPO 训练参数构建、奖励函数组合
+- `src/gmsp/tracking/experiment_tracking.py` — 实验追踪、指标记录、checkpoint 管理
 
-## Main Entrypoints
+## 快速开始（远程服务器部署）
 
-- Main notebook: [gmsp_main.ipynb](/home/GSMP/GMSP/notebooks/gmsp_main.ipynb)
-- Material send CLI: [send_material.py](/home/GSMP/GMSP/scripts/send_material.py)
-- GLSL send CLI: [send_glsl.py](/home/GSMP/GMSP/scripts/send_glsl.py)
-- Manual Blender request runner: [manual_runner.py](/home/GSMP/GMSP/scripts/manual_runner.py)
-- CUDA preflight: [check_cuda.py](/home/GSMP/GMSP/scripts/check_cuda.py)
-- Model source setup: [setup_model_sources.py](/home/GSMP/GMSP/scripts/setup_model_sources.py)
-
-## Configuration
-
-Shared defaults live in:
-
-- [default.json](/home/GSMP/GMSP/configs/default.json)
-
-Local machine overrides should live in:
-
-- `configs/local.json`
-
-Start from:
-
-- [local.example.json](/home/GSMP/GMSP/configs/local.example.json)
-
-Current default profile is `blenderllm_qwen3_5_4b`.
-
-## Transport (通信方式)
-
-GMSP 支持两种通信方式连接 Blender 端：
-
-### ZeroMQ 直连（默认）
-
-适用于双方都有公网 IP 或在同一局域网内的场景。配置 `transport` 中的 `server_address` 和 `port`：
-
-```json
-{
-  "transport": {
-    "server_address": "127.0.0.1",
-    "port": 5555
-  }
-}
-```
-
-### WebSocket 中转
-
-适用于 Blender 在 NAT 后的场景。需要部署 [GMSPforServer](../GMSPforServer) 中转服务器，然后在 `transport` 中配置 `relay_server`：
-
-```json
-{
-  "transport": {
-    "relay_server": "ws://阿里云IP:8080"
-  }
-}
-```
-
-当 `relay_server` 非空时，训练端自动使用 WebSocket 中转；否则使用 ZeroMQ 直连。
-
-### 工厂函数
-
-在代码中使用 `create_transport_client` 自动选择客户端：
-
-```python
-from gmsp.clients import create_transport_client
-from gmsp.config import load_gmsp_config, get_default_profile_name, get_profile
-
-config = load_gmsp_config()
-profile = get_profile(config, get_default_profile_name(config))
-client = create_transport_client(profile["transport"])
-client.connect()
-results = client.send_materials(materials_json)
-client.close()
-```
-
-两种客户端提供完全相同的接口（`connect`、`send_materials`、`close`、`with` 语句），切换只需改配置。
-
-## Model Setup
-
-The canonical project model path is:
-
-```text
-./models/qwen3.5-4b
-```
-
-Default provider:
-
-- ModelScope: `Qwen/Qwen3.5-4B`
-
-Backup provider:
-
-- Hugging Face: `Qwen/Qwen3.5-4B`
-
-Prepare ModelScope and make it active:
+### 1. 环境准备
 
 ```bash
-/home/ziqi/miniconda3/bin/python scripts/setup_model_sources.py --source modelscope
+# 创建 conda 环境（Python >= 3.11）
+conda create -n gmsp python=3.11 -y
+conda activate gmsp
+
+# 确认 GPU 和 CUDA 驱动版本
+nvidia-smi
+# 看右上角 CUDA Version，选择对应的 PyTorch：
+#   CUDA >= 12.4 → cu124
+#   CUDA 12.1~12.3 → cu121
+#   CUDA 11.8 → cu118
 ```
 
-Prepare both ModelScope and Hugging Face while keeping ModelScope active:
+### 2. 安装依赖
 
 ```bash
-/home/ziqi/miniconda3/bin/python scripts/setup_model_sources.py --source both --activate-source modelscope
+# 先装 PyTorch（根据你的 CUDA 版本选一个）
+# CUDA 12.4（推荐，A100/4090/5090/A10 等 Ampere+ 架构）
+pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+
+# CUDA 12.1
+# pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu121
+
+# CUDA 11.8
+# pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu118
+
+# 装 Unsloth（会自动拉 triton、xformers 等）
+pip install unsloth
+
+# 装项目其余依赖
+pip install -r requirements.txt
+
+# 以 editable 模式安装项目本身
+pip install -e .
 ```
 
-Switch the active project model to the Hugging Face copy:
-
-```bash
-/home/ziqi/miniconda3/bin/python scripts/setup_model_sources.py --source huggingface --activate-source huggingface
-```
-
-More detail is in [model_setup.md](/home/GSMP/GMSP/docs/model_setup.md).
-
-## Quick Start
-
-1. Prepare your Python environment with the training dependencies you already use for `unsloth`, `trl`, `torch`, `datasets`, `pyzmq`, `msgpack`, `modelscope`, and `huggingface_hub`.
-2. Prepare the default model:
-
-```bash
-/home/ziqi/miniconda3/bin/python scripts/setup_model_sources.py --source modelscope
-```
-
-3. Create a local config override from [local.example.json](/home/GSMP/GMSP/configs/local.example.json) and save it as `configs/local.json`.
-4. Start the Blender-side service in the `GMSPforBlender` add-on.
-5. Open [gmsp_main.ipynb](/home/GSMP/GMSP/notebooks/gmsp_main.ipynb) and run the main workflow.
-
-The main notebook now bootstraps `src/` automatically and switches its working directory to the project root so relative paths stay stable.
-
-## CLI Usage
-
-Send a material file to Blender:
-
-```bash
-python scripts/send_material.py path/to/material.py --server 127.0.0.1 --port 5555
-```
-
-Run the CUDA environment check:
+### 3. 验证环境
 
 ```bash
 python scripts/check_cuda.py
 ```
 
-## Data
+应输出 PyTorch 版本、CUDA 版本、Triton、xformers、Unsloth 版本，以及 GPU tensor 运算结果。
 
-Datasets are now stored under:
+### 4. 下载模型
 
-- [external](/home/GSMP/GMSP/data/external)
+```bash
+python scripts/setup_model_sources.py --source modelscope
+```
 
-Current research assets include:
+默认模型路径为 `./models/qwen3.5-4b`。如需使用其他模型（如 Qwen3.5-9B），在 `configs/local.json` 中配置 `model.model_name`。
 
-- [blendnet](/home/GSMP/GMSP/data/external/blendnet)
-- [gsm8k](/home/GSMP/GMSP/data/external/gsm8k)
-- [medical_o1_reasoning_sft](/home/GSMP/GMSP/data/external/medical_o1_reasoning_sft)
-- [ruozhiba_r1](/home/GSMP/GMSP/data/external/ruozhiba_r1)
-- [verl](/home/GSMP/GMSP/data/external/verl)
+### 5. 配置
 
-## Outputs
+```bash
+cp configs/local.example.json configs/local.json
+# 编辑 configs/local.json，填入中转服务器地址、模型路径等
+```
 
-Run artifacts are written under `./runs` by [experiment_tracking.py](/home/GSMP/GMSP/src/gmsp/tracking/experiment_tracking.py).
+### 6. 测试网络连通性
 
-Typical run outputs include:
+```bash
+# 确保 Blender 端插件已启动并连接到中转服务器，然后：
+python scripts/test_network.py
+```
 
-- `manifest.json`
-- `config.profile.json`
-- `config.full.json`
-- `environment.json`
-- `dataset_summary.json`
-- `metrics.jsonl`
-- `checkpoints.jsonl`
-- `summary.json`
+### 7. 启动训练
 
-## Notes
+```bash
+# 确保 Blender 端已连接
+# 打开 notebook 运行主训练流程
+jupyter notebook notebooks/gmsp_main.ipynb
+```
 
-- `notebooks/` is still the main training surface; the project is cleaner now, but training has not been fully scriptified yet.
-- `experiments/` remains intentionally messy historical space and was not normalized as part of this restructuring.
-- `models/` is treated as local machine state and is ignored by Git.
+Notebook 会自动 bootstrap `src/` 并切换工作目录到项目根目录。
 
-## Related Docs
+## 配置系统
 
-- [workspace_layout.md](/home/GSMP/GMSP/docs/workspace_layout.md)
-- [model_setup.md](/home/GSMP/GMSP/docs/model_setup.md)
+三层配置合并（优先级从低到高）：
+
+1. `config.py` 中的 `FALLBACK_CONFIG`（硬编码兜底）
+2. `configs/default.json`（项目共享默认值）
+3. `configs/local.json`（本机覆盖，gitignored）
+
+也可通过环境变量 `GMSP_CONFIG_PATH` 指定配置文件路径。
+
+### Profile 系统
+
+配置支持多个 Profile，每个 Profile 包含模型、LoRA、训练、通信等完整配置。`profile_defaults` 提供所有 Profile 的默认值，各 Profile 可覆盖其中任意字段。
+
+切换 Profile：在 `local.json` 中设置 `"default_profile": "profile名"`。
+
+### 可配置的关键超参数
+
+#### 模型配置（`profiles.xxx.model`）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `model_name` | `./models/qwen3.5-4b` | 模型路径或 HuggingFace ID |
+| `max_seq_length` | 2048 | 最大序列长度 |
+| `lora_rank` | 32 | LoRA 秩，越大精度越高但可能过拟合 |
+| `load_in_4bit` | false | 4bit 量化加载 |
+| `load_in_8bit` | true | 8bit 量化加载 |
+| `full_finetuning` | false | 全参数微调（不用 LoRA） |
+| `use_gradient_checkpointing` | `"unsloth"` | 梯度检查点策略 |
+
+#### LoRA 配置（`profile_defaults.lora`）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `finetune_vision_layers` | false | 是否微调视觉层 |
+| `finetune_language_layers` | true | 是否微调语言层 |
+| `finetune_attention_modules` | true | 是否微调注意力模块 |
+| `finetune_mlp_modules` | true | 是否微调 MLP 模块 |
+| `lora_dropout` | 0 | LoRA dropout |
+| `bias` | `"none"` | 偏置训练策略 |
+| `random_state` | 3407 | 随机种子 |
+
+#### 训练超参数（`profile_defaults.training`）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `algorithm` | `"dapo"` | RL 算法（目前仅支持 DAPO） |
+| `loss_type` | `"dapo"` | 损失函数类型 |
+| `learning_rate` | 5e-6 | 学习率 |
+| `adam_beta1` | 0.9 | Adam β1 |
+| `adam_beta2` | 0.99 | Adam β2 |
+| `weight_decay` | 0.1 | 权重衰减 |
+| `warmup_ratio` | 0.1 | 学习率预热比例 |
+| `lr_scheduler_type` | `"cosine"` | 学习率调度器 |
+| `optim` | `"adamw_torch_fused"` | 优化器 |
+| `per_device_train_batch_size` | 4 | 每卡 batch size |
+| `gradient_accumulation_steps` | 1 | 梯度累积步数 |
+| `num_generations` | 4 | DAPO 每 prompt 生成数量 |
+| `max_prompt_length` | 256 | 最大 prompt 长度 |
+| `max_steps` | 1200 | 总训练步数 |
+| `save_steps` | 200 | checkpoint 保存间隔 |
+| `max_grad_norm` | 0.1 | 梯度裁剪阈值 |
+| `epsilon` | 0.2 | DAPO clip 下界 |
+| `epsilon_high` | 0.28 | DAPO clip 上界 |
+| `beta` | 0.0 | KL 惩罚系数（DAPO 中通常为 0） |
+| `mask_truncated_completions` | true | 是否屏蔽截断的补全 |
+| `use_soft_overlong_punishment` | true | 是否使用软超长惩罚 |
+| `soft_overlong_cache_ratio` | 0.2 | 软超长惩罚缓冲区比例 |
+| `report_to` | `"tensorboard"` | 训练指标上报目标 |
+
+#### 通信配置（`profile_defaults.transport`）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `relay_server` | `ws://localhost:8080` | WebSocket 中转服务器地址 |
+| `timeout_ms` | 15000 | 请求超时（毫秒） |
+
+#### 评分模型配置（`ranking`）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `model` | `gpt-4.1-mini` | 评分用的 LLM 模型 |
+| `system_prompt` | （见 default.json） | 评分模型的系统提示词 |
+
+#### 实验追踪配置（`tracking`）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `enabled` | true | 是否启用实验追踪 |
+| `runs_dir` | `./runs` | 训练产物保存目录 |
+| `save_reward_payloads` | true | 是否保存 reward 请求/响应 |
+| `save_samples` | true | 是否保存采样记录 |
+| `save_dataset_summary` | true | 是否保存数据集摘要 |
+
+### 配置示例
+
+`configs/local.json` 完整示例：
+
+```json
+{
+  "default_profile": "blenderllm_qwen3_5_9b",
+  "profile_defaults": {
+    "transport": {
+      "relay_server": "ws://106.15.195.17:8080"
+    },
+    "training": {
+      "learning_rate": 3e-6,
+      "per_device_train_batch_size": 2,
+      "num_generations": 4,
+      "max_steps": 1500,
+      "report_to": "tensorboard"
+    }
+  },
+  "profiles": {
+    "blenderllm_qwen3_5_9b": {
+      "model": {
+        "model_name": "./models/qwen3.5-9b",
+        "max_seq_length": 2048,
+        "lora_rank": 32,
+        "load_in_4bit": false,
+        "load_in_8bit": true
+      },
+      "training": {
+        "output_name": "blenderllm_qwen3_5_9b"
+      }
+    }
+  }
+}
+```
+
+## 通信方式
+
+GMSP 使用 WebSocket 中转服务器连接训练端和 Blender 端。
+
+部署中转服务器（在阿里云等公网服务器上）：
+
+```bash
+python scripts/relay_server.py
+```
+
+在 `configs/local.json` 的 `transport.relay_server` 中配置中转服务器地址。
+
+Blender 端在插件 UI 中填入相同的中转服务器地址。
+
+两端都连接到同一个中转服务器，服务器根据客户端身份（`trainer` / `blender`）自动路由消息。
+
+## 模型设置
+
+默认模型路径：`./models/qwen3.5-4b`
+
+下载模型：
+
+```bash
+# 从 ModelScope 下载（国内推荐）
+python scripts/setup_model_sources.py --source modelscope
+
+# 从 HuggingFace 下载
+python scripts/setup_model_sources.py --source huggingface
+```
+
+如需使用其他模型，在 `configs/local.json` 的 Profile 中配置 `model.model_name`。
+
+更多细节见 [model_setup.md](docs/model_setup.md)。
+
+## 实验追踪
+
+每次训练自动在 `./runs/{时间戳}_{profile名}/` 下生成：
+
+| 文件 | 内容 |
+|---|---|
+| `manifest.json` | run ID、git commit、hostname、Python 版本 |
+| `config.profile.json` | 本次使用的 Profile 配置快照 |
+| `config.full.json` | 完整合并后的配置快照 |
+| `environment.json` | 环境变量、CUDA 设备等 |
+| `trainer_args.json` | HuggingFace TrainingArguments 完整参数 |
+| `dataset_summary.json` | 数据集信息 |
+| `metrics.jsonl` | 每步的 loss、reward 等指标 |
+| `reward_events.jsonl` | 每次 reward 调用的请求/响应/分数 |
+| `checkpoints.jsonl` | checkpoint 保存记录 |
+| `summary.json` | 训练结束状态 |
+
+### TensorBoard 可视化
+
+训练默认上报到 TensorBoard。启动 TensorBoard：
+
+```bash
+tensorboard --logdir runs/
+```
+
+然后在浏览器中打开 `http://localhost:6006` 查看训练曲线。
+
+## 数据
+
+数据集存放在 `data/external/` 下。
+
+## 备注
+
+- `notebooks/` 是主要的训练入口，训练流程尚未完全脚本化
+- `experiments/` 是历史实验空间，未做整理
+- `models/` 和 `runs/` 是本地状态，被 git 忽略
+
+## 相关文档
+
+- [workspace_layout.md](docs/workspace_layout.md)
+- [model_setup.md](docs/model_setup.md)

@@ -68,7 +68,7 @@ FALLBACK_CONFIG = {
             "max_steps": 1200,
             "save_steps": 200,
             "max_grad_norm": 0.1,
-            "report_to": "none",
+            "report_to": "tensorboard",
         },
     },
     "profiles": {},
