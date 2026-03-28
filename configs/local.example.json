@@ -10,7 +10,8 @@
     "blenderllm_qwen3_5_4b": {
       "transport": {
         "server_address": "127.0.0.1",
-        "port": 5555
+        "port": 5555,
+        "relay_server": "ws://你的阿里云IP:8080"
       }
     },
     "blenderllm_qwen3_8b": {

@@ -24,7 +24,8 @@
       "server_address": "localhost",
       "port": 5555,
       "timeout_ms": 15000,
-      "reverse_mode": false
+      "reverse_mode": false,
+      "relay_server": null
     },
     "lora": {
       "finetune_vision_layers": false,

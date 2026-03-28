@@ -35,6 +35,7 @@ FALLBACK_CONFIG = {
             "port": 5555,
             "timeout_ms": 15000,
             "reverse_mode": False,
+            "relay_server": None,
         },
         "lora": {
             "finetune_vision_layers": False,

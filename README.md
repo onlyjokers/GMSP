@@ -47,8 +47,12 @@ GMSP/
 
 - [config.py](/home/GSMP/GMSP/src/gmsp/config.py)
   Loads the project config, resolves paths, and selects profiles.
+- [clients/\_\_init\_\_.py](/home/GSMP/GMSP/src/gmsp/clients/__init__.py)
+  `create_transport_client(transport_config)` — 工厂函数，根据配置自动选择 ZeroMQ 或 WebSocket 客户端。
 - [blender_client.py](/home/GSMP/GMSP/src/gmsp/clients/blender_client.py)
-  ZeroMQ client for sending Blender material jobs.
+  ZeroMQ client for sending Blender material jobs (`ClientSender`).
+- [websocket_client.py](/home/GSMP/GMSP/src/gmsp/clients/websocket_client.py)
+  WebSocket client for relay server (`WebSocketClientSender`). 同步接口与 `ClientSender` 一致。
 - [glsl_client.py](/home/GSMP/GMSP/src/gmsp/clients/glsl_client.py)
   ZeroMQ client for GLSL-side experiments.
 - [rl_training.py](/home/GSMP/GMSP/src/gmsp/training/rl_training.py)
@@ -80,6 +84,55 @@ Start from:
 - [local.example.json](/home/GSMP/GMSP/configs/local.example.json)
 
 Current default profile is `blenderllm_qwen3_5_4b`.
+
+## Transport (通信方式)
+
+GMSP 支持两种通信方式连接 Blender 端：
+
+### ZeroMQ 直连（默认）
+
+适用于双方都有公网 IP 或在同一局域网内的场景。配置 `transport` 中的 `server_address` 和 `port`：
+
+```json
+{
+  "transport": {
+    "server_address": "127.0.0.1",
+    "port": 5555
+  }
+}
+```
+
+### WebSocket 中转
+
+适用于 Blender 在 NAT 后的场景。需要部署 [GMSPforServer](../GMSPforServer) 中转服务器，然后在 `transport` 中配置 `relay_server`：
+
+```json
+{
+  "transport": {
+    "relay_server": "ws://阿里云IP:8080"
+  }
+}
+```
+
+当 `relay_server` 非空时，训练端自动使用 WebSocket 中转；否则使用 ZeroMQ 直连。
+
+### 工厂函数
+
+在代码中使用 `create_transport_client` 自动选择客户端：
+
+```python
+from gmsp.clients import create_transport_client
+from gmsp.config import load_gmsp_config, get_default_profile_name, get_profile
+
+config = load_gmsp_config()
+profile = get_profile(config, get_default_profile_name(config))
+client = create_transport_client(profile["transport"])
+client.connect()
+results = client.send_materials(materials_json)
+client.close()
+```
+
+两种客户端提供完全相同的接口（`connect`、`send_materials`、`close`、`with` 语句），切换只需改配置。
 
 ## Model Setup
 
