@@ -18,7 +18,7 @@
     "save_samples": true,
     "save_dataset_summary": true
   },
-  "default_profile": "blenderllm_qwen3_5_4b",
+  "default_profile": "blenderllm_qwen3_5_9b",
   "profile_defaults": {
     "transport": {
       "relay_server": "ws://106.15.195.17:8080",
@@ -83,7 +83,7 @@
         "relay_server": "ws://106.15.195.17:8080"
       },
       "model": {
-        "model_name": "/home/ziqi/.cache/modelscope/hub/models/Qwen/Qwen3.5-4B",
+        "model_name": "./models/qwen3.5-4b",
         "preferred_source": "modelscope",
         "modelscope_model_id": "Qwen/Qwen3.5-4B",
         "huggingface_model_id": "Qwen/Qwen3.5-4B",
@@ -98,12 +98,32 @@
         "output_name": "blenderllm_qwen3_5_4b"
       }
     },
+    "blenderllm_qwen3_5_9b": {
+      "transport": {
+        "relay_server": "ws://106.15.195.17:8080"
+      },
+      "model": {
+        "model_name": "./models/qwen3.5-9b",
+        "preferred_source": "modelscope",
+        "modelscope_model_id": "Qwen/Qwen3.5-9B",
+        "huggingface_model_id": "Qwen/Qwen3.5-9B",
+        "max_seq_length": 2048,
+        "lora_rank": 32,
+        "load_in_4bit": false,
+        "load_in_8bit": true,
+        "full_finetuning": false,
+        "use_gradient_checkpointing": "unsloth"
+      },
+      "training": {
+        "output_name": "blenderllm_qwen3_5_9b"
+      }
+    },
     "blenderllm_qwen3_8b": {
       "transport": {
         "relay_server": "ws://106.15.195.17:8080"
       },
       "model": {
-        "model_name": "/home/ziqi/.cache/modelscope/hub/models/Qwen/Qwen3.5-4B",
+        "model_name": "./models/qwen3.5-4b",
         "preferred_source": "modelscope",
         "modelscope_model_id": "Qwen/Qwen3.5-4B",
         "huggingface_model_id": "Qwen/Qwen3.5-4B",
