@@ -21,7 +21,7 @@
   "default_profile": "blenderllm_qwen3_5_4b",
   "profile_defaults": {
     "transport": {
-      "relay_server": "ws://localhost:8080",
+      "relay_server": "ws://106.15.195.17:8080",
       "timeout_ms": 15000
     },
     "lora": {
@@ -51,9 +51,9 @@
       "lr_scheduler_type": "cosine",
       "optim": "adamw_torch_fused",
       "logging_steps": 1,
-      "per_device_train_batch_size": 4,
+      "per_device_train_batch_size": 8,
       "gradient_accumulation_steps": 1,
-      "num_generations": 4,
+      "num_generations": 8,
       "max_prompt_length": 256,
       "max_steps": 1200,
       "save_steps": 200,
@@ -64,7 +64,7 @@
   "profiles": {
     "blenderllm2_gemma3_12b": {
       "transport": {
-        "relay_server": "ws://10.30.244.17:8080"
+        "relay_server": "ws://106.15.195.17:8080"
       },
       "model": {
         "model_name": "./models/gemma-3-12b-it",
@@ -80,10 +80,10 @@
     },
     "blenderllm_qwen3_5_4b": {
       "transport": {
-        "relay_server": "ws://121.196.205.73:8080"
+        "relay_server": "ws://106.15.195.17:8080"
       },
       "model": {
-        "model_name": "./models/qwen3.5-4b",
+        "model_name": "/home/ziqi/.cache/modelscope/hub/models/Qwen/Qwen3.5-4B",
         "preferred_source": "modelscope",
         "modelscope_model_id": "Qwen/Qwen3.5-4B",
         "huggingface_model_id": "Qwen/Qwen3.5-4B",
@@ -100,10 +100,10 @@
     },
     "blenderllm_qwen3_8b": {
       "transport": {
-        "relay_server": "ws://121.196.205.73:8080"
+        "relay_server": "ws://106.15.195.17:8080"
       },
       "model": {
-        "model_name": "./models/qwen3.5-4b",
+        "model_name": "/home/ziqi/.cache/modelscope/hub/models/Qwen/Qwen3.5-4B",
         "preferred_source": "modelscope",
         "modelscope_model_id": "Qwen/Qwen3.5-4B",
         "huggingface_model_id": "Qwen/Qwen3.5-4B",
