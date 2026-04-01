@@ -1,3 +1,10 @@
+Metadata-Version: 2.4
+Name: gmsp
+Version: 0.1.0
+Summary: Research workspace for Blender material generation and RL training.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+
 # GMSP
 
 GMSP 是一个用于 Blender 材质生成的研究工作区，核心流程：LLM 生成 Blender 材质的 Python 代码 → 通过 WebSocket 发送到远程 Blender 实例（`GMSPforBlender` 插件）→ Blender 返回准确度/意义排名 → 排名作为奖励信号反馈到 DAPO 强化学习训练循环。
@@ -77,11 +84,6 @@ pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 # 装 Unsloth（会自动拉 triton、xformers 等）
 pip install unsloth
 
-# 可选：启用 Flash Attention 2（Ada/Ampere/Hopper 上通常更快）
-# 如果未安装，Unsloth 会回退到 xformers。
-# 需要与你的 Python / PyTorch / CUDA 组合兼容的 wheel 或本地 CUDA toolkit。
-# pip install flash-attn --no-build-isolation
-
 # 装项目其余依赖
 pip install -r requirements.txt
 
@@ -96,18 +98,6 @@ python scripts/check_cuda.py
 ```
 
 应输出 PyTorch 版本、CUDA 版本、Triton、xformers、Unsloth 版本，以及 GPU tensor 运算结果。
-
-如需启用 TRL 的 vLLM 生成后端，可在 `configs/local.json` 的 `training` 段加入：
-
-```json
-{
-  "use_vllm": true,
-  "vllm_mode": "colocate",
-  "vllm_gpu_memory_utilization": 0.3
-}
-```
-
-单卡训练默认建议 `colocate`；如果使用独立推理卡，再显式切到 `server`。
 
 ### 4. 下载模型
 
